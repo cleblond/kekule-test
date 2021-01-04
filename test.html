@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Create Structure</title>
+  <script src="libs/raphael.js"></script>
+  <script src="libs/raphael.export.js"></script>
+  <!-- <script src="libs/three.min.js"></script> -->
+  <script src="libs/Three.js"></script>
+
+  <script src="libs/kekule/kekule.min.js"></script>
+  <!--<script src="libs/Kekule.js/dist/kekule.js?modules=calculation,chemWidget,openbabel"></script>-->
+  <!-- <script src="/tsugi/mod/openochem/js/jquery-1.4.2.min.js"></script> -->
+  
+  <link rel="stylesheet" type="text/css" href="libs_new/kekule/themes/default/kekule.css" />
+  
+  <!--
+  <link rel="stylesheet" type="text/css" href="styles/default.css" />
+  <link rel="stylesheet" type="text/css" href="styles/defaultColor.css" />
+  <link rel="stylesheet" type="text/css" href="styles/chemWidget.css" />
+  <link rel="stylesheet" type="text/css" href="styles/chemWidgetColor.css" />
+  -->
+  <link rel="stylesheet" type="text/css" href="styles/override.css" />
+  
+  
+  
+  
+  
+  <style>
+  /*
+  #chemObjSetter {
+  height: 400px;
+
+  }
+  */
+  /*
+  canvas {
+  width: 900px;
+  }
+  */
+  </style>
+
+  <script>
+    
+    var chemObjSetter, btnTerminate, btnGen;
+	var CLASS_NAME_VIEWER3D = 'K-Chem-Viewer3D';
+	var CLASS_NAME_VIEWER2D = 'K-Chem-Viewer2D';
+
+    function publish()
+		{
+       
+	var molecule = chemObjSetter.getChemObj();
+	
+	if (typeof molecule.renderOptions === "undefined") {
+            molecule.renderOptions = {};
+        }
+            molecule.renderOptions.useAtomSpecifiedColor = true;
+            molecule.renderOptions.chargeMarkType = 3;
+	
+	
+	var kjs = Kekule.IO.saveFormatData(molecule, 'Kekule-JSON');
+	var exportAttribs = chemObjSetter.getExportImgElemAttributes();
+
+	// create element in document first (to render object first) then insert it to document in editor.
+        var viewerElem = parent.tinymce.activeEditor.dom.create('img');
+	var viewerDomElem = viewerElem.$;
+
+//console.log(viewerDomElem);
+
+	var DU = Kekule.DomUtils;
+	DU.setElemAttributes(viewerElem, exportAttribs);
+	if (chemObjSetter.getIs3D())
+		parent.tinymce.activeEditor.dom.addClass(viewerElem, CLASS_NAME_VIEWER3D);
+	else
+        parent.tinymce.activeEditor.dom.addClass(viewerElem, CLASS_NAME_VIEWER2D);
+        //console.log(viewerElem);
+
+	parent.tinymce.activeEditor.dom.setAttrib(viewerElem, 'data-predefined-setting', 'basic');
+        parent.tinymce.activeEditor.dom.setAttrib(viewerElem, 'data-chem-obj', kjs);
+	//editor.insertElement(viewerElem);
+
+
+        parent.tinymce.activeEditor.selection.setNode(viewerElem);
+        parent.tinymce.activeEditor.windowManager.close();
+    }
+	
+	
+    function clear()
+		{
+			var targetElem = document.getElementById('publishStage');
+			targetElem.innerHTML = '';
+		}
+
+    function getCurrMol()
+    {
+        //return composer.getChemSpace().getChildAt(0);
+        chemObjSetter = Kekule.Widget.getWidgetById('chemObjSetter');
+        return Kekule.ChemStructureUtils.getTotalStructFragment(chemObjSetter.getChemObj());
+    }
+
+
+    function calcStart()
+    {
+        btnGen.setEnabled(false);
+        btnTerminate.setEnabled(true);
+        timeStart = Date.now();
+    }
+    function calcEnd()
+    {
+        btnGen.setEnabled(true);
+        btnTerminate.setEnabled(false);
+        timeEnd = Date.now();
+    }
+
+
+
+    function generate3D()
+    {
+        var mol = getCurrMol();
+        //report('Calculating...');
+        calcStart();
+        calculator = Kekule.Calculator.generate3D(mol, {'forceField': ''},
+            function(generatedMol){
+                calcEnd();
+                var elapse = (timeEnd - timeStart) / 1000;
+                chemObjSetter.setChemObj(generatedMol);
+                //report('Calculation done in ' + elapse + ' sec');
+            },
+            function(err)
+            {
+                if (err)
+                {
+                    calcEnd();
+                    //report(err.getMessage? err.getMessage(): err);
+                    Kekule.error(err);                  
+                }
+            }
+        );
+    }
+
+    function terminate()
+    {
+        //report('Terminated by user');
+        calcEnd();
+        if (calculator)
+        {
+            calculator.halt();          
+        }       
+    }
+    
+    function init()
+    {
+    
+     console.log(Kekule.VERSION);
+     //var params = window.location.search;
+     chemObjSetter = Kekule.Widget.getWidgetById('chemObjSetter');
+
+     var vrenderConfigs = chemObjSetter.viewer.getRenderConfigs();
+     vrenderConfigs.getColorConfigs().setUseAtomSpecifiedColor(true);
+     vrenderConfigs.getMoleculeDisplayConfigs().setDefChargeMarkType(3);
+
+      chemObjSetter.setToolButtons([
+       'openEditor', 'loadData', 'saveData', 'clearObjs', 'zoomIn', 'zoomOut', 'rotateLeft', 'rotateRight', 'reset',
+       {
+        //'text': '2D->3D',  // button caption
+        'text': '2D->3D', 'hint': 'Convert 2D to 3D', 'showText': true, 'showGlyph': false, 'cssText': 'width:auto',
+        'id': 'btnGen',
+        '#execute': generate3D  // event handler when executing the button
+      },
+      {
+        'id': 'btnTerminate',
+        'text': 'Terminate', 'hint': 'Terminate 2D/3D calculation', 'showText': true, 'showGlyph': false, 'cssText': 'width:auto',
+        '#execute': terminate
+      },{
+      'text': 'Insert',  // button caption
+      'htmlClass': 'K-Res-Button-YesOk',  // show a OK icon
+      'hint': 'Insert Structure into Document',
+      'showText': true,   // display caption of button
+      '#execute': function(){ publish(); }  // event handler when executing the button
+    }
+
+    ]);
+
+      btnGen = Kekule.Widget.getWidgetById('btnGen');
+      btnTerminate = Kekule.Widget.getWidgetById('btnTerminate');
+      btnTerminate.setEnabled(false);
+
+    }
+  Kekule.X.domReady(init);
+  </script>
+
+<body>
+
+  <div id="chemObjSetter" data-kekule-widget="Kekule.ChemWidget.ChemObjInserter" data-auto-size-export="true" data-resizable="true"></div>
+</body>
+</html>
